@@ -43,10 +43,17 @@ button{font:inherit;cursor:pointer}
 .cell{aspect-ratio:1;border-radius:10px;border:1.5px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;min-width:0;transition:transform .12s}
 .cell b{font-size:19px;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr}
 .cell small{font-size:9px;opacity:.85;white-space:nowrap;max-width:100%;overflow:hidden}
-.cell.m2{background:var(--m);color:var(--mi);border:0}
-.cell.f2{background:var(--f);color:var(--fi);border:0}
-.cell.s1{background:var(--y1);color:var(--y1i);border:0}
-.cell.s0{background:var(--y0);color:var(--y0i);border:0}
+.cell.n{background:#1f4fa8;color:#ffd21f;border:0}
+.cell.fahl{background:#fff;color:#000;border:1.5px solid #bdb5a3}
+.cell.fahl b{font-size:15px}
+.cell.tw{background:#0f5132;color:#ffd21f;border:0}
+.cell.tr{background:#b5121b;color:#8ecbff;border:0}
+.lg-n{background:#1f4fa8}.lg-fahl{background:#fff;border:1px solid #bdb5a3}.lg-tw{background:#0f5132}.lg-tr{background:#b5121b}
+.badge{display:inline-block;font-size:12px;font-weight:800;border-radius:8px;padding:2px 7px;margin-inline-start:6px}
+.badge.tw{background:#0f5132;color:#ffd21f}.badge.tr{background:#b5121b;color:#8ecbff}
+.dayh{font-size:14px;font-weight:800;color:var(--acc);margin:16px 0 2px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.lg-ico{font-size:20px;width:28px;text-align:center;flex:none}
+.lg-time{font-size:12px;color:var(--mut);flex:none}
 .cell.sel{outline:3px solid var(--acc);transform:scale(.9)}
 .cell.drop{border-color:var(--acc)}
 .addrow{display:block;margin:8px auto 0;background:none;border:0;color:var(--mut);font-size:14px;padding:4px 10px}
@@ -159,9 +166,18 @@ function save(){idbPut('kv','db',D).catch(()=>toast('تعذّر الحفظ!'))}
 
 /* ---------- أدوات ---------- */
 const catInfo=a=>(CATS[a.type].find(c=>c[0]===a.cat))||[a.cat,'f',2];
-function cellCls(a){const c=catInfo(a);return c[2]===2?(c[1]==='m'?'m2':'f2'):'s'+c[2]}
+// الفحول لها أرقام مستقلة (m) عن بقية الحلال (o) داخل كل قسم
+const spaceOf=(type,cat)=>{const c=CATS[type].find(x=>x[0]===cat)||[cat,'f',2];return c[1]==='m'&&c[2]===2?'m':'o'};
+const isFahl=a=>spaceOf(a.type,a.cat)==='m';
+const dn=a=>a?(isFahl(a)?'فحل '+a.num:a.num):'';
+let MULTI={};
+function calcMulti(){MULTI={};Object.values(D.animals).forEach(mo=>{const g={};mo.births.forEach(b=>{if(b.date)(g[b.date]=g[b.date]||[]).push(b)});
+  Object.values(g).forEach(arr=>{if(arr.length>1)arr.forEach(b=>{if(b.childId)MULTI[b.childId]=arr.length})})})}
+function cellCls(a){if(isFahl(a))return 'fahl';const n=MULTI[a.id]||0;return n>=3?'tr':n===2?'tw':'n'}
+const multiBadge=n=>n>=3?'<span class="badge tr">ثلاثة</span>':n===2?'<span class="badge tw">توأم</span>':'';
 const actives=type=>Object.values(D.animals).filter(a=>a.status==='a'&&(!type||a.type===type));
-const findActive=(type,num)=>actives(type).find(a=>a.num===num);
+const findActive=(type,num,sp)=>actives(type).find(a=>a.num===num&&(!sp||spaceOf(a.type,a.cat)===sp));
+function logE(k,a,x,type){D.log=D.log||[];D.log.push({t:Date.now(),k,type:a?a.type:(type||cur),id:a?a.id:'',x});if(D.log.length>6000)D.log.splice(0,D.log.length-6000)}
 function penOf(id){return D.pens.find(p=>p.cells.includes(id))}
 function removeFromPens(id){D.pens.forEach(p=>{const i=p.cells.indexOf(id);if(i>-1)p.cells[i]=null})}
 function place(id,penId,idx){
@@ -173,7 +189,7 @@ function parentOf(a,which){
   const id=a[which+'Id'],num=a[which];
   if(id&&D.animals[id])return D.animals[id];
   if(!num)return null;
-  return findActive(a.type,num)||Object.values(D.animals).find(x=>x.type===a.type&&x.num===num)||null;
+  return findActive(a.type,num,which==='father'?'m':'o')||findActive(a.type,num)||Object.values(D.animals).find(x=>x.type===a.type&&x.num===num)||null;
 }
 function createAnimal(o){
   const a={id:uid(),type:o.type,num:o.num,cat:o.cat,birth:o.birth||'',father:o.father||'',mother:o.mother||'',
@@ -189,13 +205,14 @@ function femalesList(type){return `<datalist id="dlf">${actives(type).filter(a=>
 function renderSide(){
   $('#side').innerHTML=TYPES.map(t=>`<button class="${t.k===cur?'on':''}" onclick="setType('${t.k}')">${t.e}<span>${t.n}</span></button>`).join('')+
   `<div class="sp"></div>
+   <button class="tool" onclick="openLog()">📋<span>التغييرات</span></button>
    <button class="tool" onclick="openSearch()">🔍<span>بحث</span></button>
    <button class="tool" onclick="openArchive()">🗂️<span>الأرشيف</span></button>
    <button class="tool" onclick="openBackup()">💾<span>نسخة</span></button>`;
 }
 function setType(k){cur=k;sel=null;try{localStorage.setItem('cur',k)}catch(e){}render();$('#main').scrollTop=0}
 function render(){
-  renderSide();
+  renderSide();calcMulti();
   const pens=D.pens.filter(p=>p.type===cur);
   const act=actives(cur);
   const counts=CATS[cur].map(c=>[c[0],act.filter(a=>a.cat===c[0]).length]).filter(x=>x[1]);
@@ -205,10 +222,10 @@ function render(){
     <button class="btn" onclick="addPen()">+ شبك</button></div>
     <div class="sum">المجموع: <b>${act.length}</b>${counts.length?' — '+counts.map(x=>esc(x[0])+' '+x[1]).join('، '):''}</div>`;
   if(moveMode)h+=`<div class="hint">${sel?'الآن اضغط المربع الذي تريد نقل الرقم إليه (أو رقماً آخر للتبديل)':'اضغط على الرقم الذي تريد نقله'}</div>`;
-  if(unplaced.length)h+=`<div class="hint" style="background:var(--red);color:#fff">أرقام بدون شبك: ${unplaced.map(a=>`<a style="color:#fff;font-weight:800;text-decoration:underline" onclick="openAnimal('${a.id}')">${esc(a.num)}</a>`).join('، ')}</div>`;
+  if(unplaced.length)h+=`<div class="hint" style="background:var(--red);color:#fff">أرقام بدون شبك: ${unplaced.map(a=>`<a style="color:#fff;font-weight:800;text-decoration:underline" onclick="openAnimal('${a.id}')">${esc(dn(a))}</a>`).join('، ')}</div>`;
   h+=pens.map(penHTML).join('');
   if(!pens.length)h+=`<div class="empty">لا توجد شبوك. اضغط «+ شبك» لإضافة شبك.</div>`;
-  h+=`<div class="legend"><span><i style="background:var(--m)"></i>فحل</span><span><i style="background:var(--f)"></i>أم</span><span><i style="background:var(--y1)"></i>طلي/رخل/جفر</span><span><i style="background:var(--y0)"></i>رضيع</span></div>`;
+  h+=`<div class="legend"><span><i class="lg-n"></i>عادي</span><span><i class="lg-fahl"></i>فحل</span><span><i class="lg-tw"></i>توأم</span><span><i class="lg-tr"></i>ثلاثة</span></div>`;
   $('#main').innerHTML=h;
 }
 function penHTML(p){
@@ -216,6 +233,7 @@ function penHTML(p){
   const cells=p.cells.map((id,i)=>{const a=id&&D.animals[id];
     const s=sel&&sel.p===p.id&&sel.i===i?' sel':'';
     if(!a)return `<div class="cell${moveMode&&sel?' drop':''}" data-p="${p.id}" data-i="${i}"></div>`;
+    if(isFahl(a))return `<div class="cell fahl${s}" data-p="${p.id}" data-i="${i}"><b>فحل ${esc(a.num)}</b></div>`;
     return `<div class="cell ${cellCls(a)}${s}" data-p="${p.id}" data-i="${i}"><b>${esc(a.num)}</b><small>${esc(a.cat)}</small></div>`}).join('');
   return `<section class="pen"><div class="ph"><b onclick="penMenu('${p.id}')">${esc(p.name)}</b><span class="cnt">${n}</span><button class="mini" onclick="penMenu('${p.id}')">⋯</button></div>
     <div class="grid">${cells}</div><button class="addrow" onclick="addRow('${p.id}')">+ صف</button></section>`;
@@ -227,6 +245,8 @@ $('#main').addEventListener('click',e=>{
     if(!sel){if(id){sel={p:p.id,i};render()}return}
     if(sel.p===p.id&&sel.i===i){sel=null;render();return}
     const sp=D.pens.find(x=>x.id===sel.p);const t=sp.cells[sel.i];sp.cells[sel.i]=p.cells[i];p.cells[i]=t;
+    if(sp!==p){logE('move',D.animals[t],`نقل ${dn(D.animals[t])} من «${sp.name}» إلى «${p.name}»`);
+      if(sp.cells[sel.i])logE('move',D.animals[sp.cells[sel.i]],`نقل ${dn(D.animals[sp.cells[sel.i]])} من «${p.name}» إلى «${sp.name}»`)}
     sel=null;save();render();toast('تم النقل');return;
   }
   if(id)openAnimal(id);else newAnimal(p.id,i);
@@ -240,7 +260,7 @@ function addPen(){
 }
 function savePen(){
   const name=$('#f_name').value.trim()||'شبك';const rows=Math.max(1,Math.min(40,+$('#f_rows').value||1));
-  D.pens.push({id:uid(),type:cur,name,cells:Array(rows*5).fill(null)});save();closeSheet();render();
+  D.pens.push({id:uid(),type:cur,name,cells:Array(rows*5).fill(null)});logE('pen',null,`إضافة شبك «${name}»`);save();closeSheet();render();
   setTimeout(()=>{const m=$('#main');m.scrollTop=m.scrollHeight},50);
 }
 function penMenu(pid){
@@ -253,7 +273,7 @@ function penMenu(pid){
    <div class="two" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="sec2" onclick="movePen('${pid}',-1)">⬆ للأعلى</button><button class="sec2" onclick="movePen('${pid}',1)">⬇ للأسفل</button></div>
    <button class="sec2 danger" onclick="delPen('${pid}')">حذف الشبك${n?' (يجب نقل الأرقام أولاً)':''}</button>`);
 }
-function renamePen(pid){const p=D.pens.find(x=>x.id===pid);p.name=$('#f_name').value.trim()||p.name;save();closeSheet();render()}
+function renamePen(pid){const p=D.pens.find(x=>x.id===pid);const nn=$('#f_name').value.trim()||p.name;if(nn!==p.name)logE('pen',null,`تغيير اسم الشبك «${p.name}» إلى «${nn}»`,p.type);p.name=nn;save();closeSheet();render()}
 function trimRow(pid){const p=D.pens.find(x=>x.id===pid);if(p.cells.length<=5)return toast('لا يمكن حذف الصف الوحيد');
   const last=p.cells.slice(-5);if(last.some(Boolean))return toast('آخر صف فيه أرقام');p.cells.splice(-5);save();closeSheet();render()}
 function compactPen(pid){const p=D.pens.find(x=>x.id===pid);const ids=p.cells.filter(Boolean);
@@ -263,7 +283,7 @@ function compactPen(pid){const p=D.pens.find(x=>x.id===pid);const ids=p.cells.fi
 function movePen(pid,dir){const same=D.pens.filter(p=>p.type===cur);const i=same.findIndex(p=>p.id===pid),j=i+dir;if(j<0||j>=same.length)return;
   const gi=D.pens.indexOf(same[i]),gj=D.pens.indexOf(same[j]);[D.pens[gi],D.pens[gj]]=[D.pens[gj],D.pens[gi]];save();closeSheet();render()}
 function delPen(pid){const p=D.pens.find(x=>x.id===pid);if(p.cells.some(Boolean))return toast('انقل الأرقام من الشبك أولاً');
-  if(!confirm('حذف الشبك «'+p.name+'»؟'))return;D.pens=D.pens.filter(x=>x!==p);save();closeSheet();render()}
+  if(!confirm('حذف الشبك «'+p.name+'»؟'))return;D.pens=D.pens.filter(x=>x!==p);logE('pen',null,`حذف الشبك «${p.name}»`,p.type);save();closeSheet();render()}
 
 /* ---------- إضافة رقم ---------- */
 function newAnimal(pid,i){
@@ -277,34 +297,36 @@ function newAnimal(pid,i){
 }
 function saveNew(pid,i){
   const num=normNum($('#f_num').value);if(!num)return $('#f_err').textContent='اكتب الرقم';
-  const ex=findActive(cur,num);
-  if(ex){const p=penOf(ex.id);$('#f_err').innerHTML=`الرقم ${esc(num)} موجود${p?' في «'+esc(p.name)+'»':''}. <a class="lk" onclick="place('${ex.id}','${pid}',${i});save();closeSheet();render()">انقله هنا</a>`;return}
+  const cat=$('#f_cat').value;const ex=findActive(cur,num,spaceOf(cur,cat));
+  if(ex){const p=penOf(ex.id);$('#f_err').innerHTML=`${esc(dn(ex))} موجود${p?' في «'+esc(p.name)+'»':''}. <a class="lk" onclick="moveHere('${ex.id}','${pid}',${i})">انقله هنا</a>`;return}
   const mother=normNum($('#f_mother').value),father=normNum($('#f_father').value);
-  const m=mother&&findActive(cur,mother),f=father&&findActive(cur,father);
-  const a=createAnimal({type:cur,num,cat:$('#f_cat').value,birth:$('#f_birth').value,father,mother,fatherId:f?f.id:'',motherId:m?m.id:''});
-  place(a.id,pid,i);save();closeSheet();render();
+  const m=mother&&findActive(cur,mother,'o'),f=father&&findActive(cur,father,'m');
+  const a=createAnimal({type:cur,num,cat,birth:$('#f_birth').value,father,mother,fatherId:f?f.id:'',motherId:m?m.id:''});
+  place(a.id,pid,i);logE('add',a,`إضافة ${dn(a)} (${cat}) في «${D.pens.find(p=>p.id===pid).name}»`);save();closeSheet();render();
 }
+function moveHere(id,pid,i){const from=penOf(id),to=D.pens.find(p=>p.id===pid);place(id,pid,i);
+  logE('move',D.animals[id],`نقل ${dn(D.animals[id])}${from?' من «'+from.name+'»':''} إلى «${to.name}»`);save();closeSheet();if(stack.length)renderPage();else render()}
 
 /* ---------- صفحة الحيوان ---------- */
 function openAnimal(id){closeSheet();if(stack.at(-1)!==id)stack.push(id);renderPage(true)}
 function backPage(){stack.pop();renderPage(true)}
 function renderPage(top){
-  const el=$('#page');
+  const el=$('#page');calcMulti();
   if(!stack.length){el.classList.remove('on');el.innerHTML='';render();return}
   const a=D.animals[stack.at(-1)];if(!a){stack.pop();return renderPage(top)}
   const st=el.scrollTop;el.innerHTML=pageHTML(a);el.classList.add('on');el.scrollTop=top?0:st;
   if(a.photo)idbGet('photos',a.id).then(src=>{if(src&&stack.at(-1)===a.id){const im=$('#pimg');im.src=src;im.hidden=false;$('#pph').hidden=true}});
 }
 const curA=()=>D.animals[stack.at(-1)];
-function link(x){return x?`<a class="lk" onclick="openAnimal('${x.id}')">${esc(x.num)}</a>${x.status!=='a'?' <span class="muted">('+REASONS[x.status]+')</span>':''}`:''}
+function link(x){return x?`<a class="lk" onclick="openAnimal('${x.id}')">${esc(dn(x))}</a>${x.status!=='a'?' <span class="muted">('+REASONS[x.status]+')</span>':''}`:''}
 function pageHTML(a){
   const c=catInfo(a),pen=penOf(a.id),fa=parentOf(a,'father'),mo=parentOf(a,'mother');
-  let h=`<div class="pg-head"><button class="back" onclick="backPage()">→ رجوع</button><b>${typeName(a.type)} · ${esc(a.num)}</b><button class="mini" onclick="editAnimal()">تعديل</button></div><div class="pg">`;
+  let h=`<div class="pg-head"><button class="back" onclick="backPage()">→ رجوع</button><b>${typeName(a.type)} · ${esc(dn(a))}</b><button class="mini" onclick="editAnimal()">تعديل</button></div><div class="pg">`;
   if(a.status!=='a')h+=`<div class="gone">خرج الرقم: <b>${REASONS[a.status]}</b> بتاريخ ${fmt(a.end&&a.end.date)}${a.end&&a.end.note?'<br>'+esc(a.end.note):''}<br><button onclick="restoreAnimal()">إرجاعه للحلال</button></div>`;
   h+=`<div class="photo" onclick="pickPhoto()"><img id="pimg" hidden alt=""><span id="pph">📷 اضغط لإضافة صورة</span></div>
   <div class="info">
-    <div class="row"><span>الرقم</span><div class="big">${esc(a.num)}</div></div>
-    <div class="row"><span>الفئة</span><div>${esc(a.cat)}</div></div>
+    <div class="row"><span>الرقم</span><div class="big">${esc(dn(a))}</div></div>
+    <div class="row"><span>الفئة</span><div>${esc(a.cat)}${multiBadge(MULTI[a.id]||0)}</div></div>
     ${a.status==='a'?`<div class="row" onclick="moveSheet()"><span>الشبك</span><div>${pen?esc(pen.name):'<span class="danger">بدون شبك</span>'} <a class="lk" style="font-size:14px">نقل</a></div></div>`:''}
     <div class="row"><span>الميلاد</span><div>${fmt(a.birth)}${a.birth?' <span class="muted" style="font-weight:400">('+age(a.birth)+')</span>':''}</div></div>
     <div class="row"><span>الأب</span><div>${fa?link(fa):esc(a.father)||'—'}</div></div>
@@ -314,14 +336,14 @@ function pageHTML(a){
   if(c[1]==='f'){
     const bs=[...a.births].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
     h+=`<div class="sec"><h3>١ · الولادات <span class="muted" style="font-size:14px;flex:1;margin-right:8px">${bs.length?'('+bs.length+')':''}</span><button class="mini" onclick="addBirth()">+ ولادة</button></h3>`+
-    (bs.length?bs.map(b=>{const ch=b.childId&&D.animals[b.childId];
-      return `<div class="item"><div class="t"><b>${esc(b.cat)}</b><div>${fmt(b.date)}${b.father?' · الأب '+esc(b.father):''}</div></div>
+    (bs.length?bs.map(b=>{const ch=b.childId&&D.animals[b.childId];const n=b.date?a.births.filter(x=>x.date===b.date).length:1;
+      return `<div class="item"><div class="t"><b>${esc(b.cat)}</b>${multiBadge(n)}<div>${fmt(b.date)}${b.father?' · الأب فحل '+esc(b.father):''}</div></div>
       ${ch?`<a class="tag" onclick="openAnimal('${ch.id}')">${esc(ch.num)}</a>${ch.status!=='a'?'<span class="muted" style="font-size:13px">'+REASONS[ch.status]+'</span>':''}`:`<button class="mini" onclick="numberBirth('${b.id}')">ترقيم</button>`}
       <button class="del" onclick="delBirth('${b.id}')">✕</button></div>`}).join(''):'<div class="empty">لا توجد ولادات مسجلة</div>')+`</div>`;
   }else{
     const kids=Object.values(D.animals).filter(x=>x.type===a.type&&x.id!==a.id&&(x.fatherId===a.id||(!x.fatherId&&x.father&&x.father===a.num)));
     h+=`<div class="sec"><h3>١ · مواليده ${kids.length?'('+kids.length+')':''}</h3>`+(kids.length?kids.sort((x,y)=>(y.birth||'').localeCompare(x.birth||'')).map(k=>
-      `<div class="item"><div class="t"><b>${esc(k.cat)}</b><div>${fmt(k.birth)}${k.mother?' · الأم '+esc(k.mother):''}</div></div><a class="tag" onclick="openAnimal('${k.id}')">${esc(k.num)}</a></div>`).join(''):'<div class="empty">لا يوجد مواليد مرقمة باسمه</div>')+`</div>`;
+      `<div class="item"><div class="t"><b>${esc(k.cat)}</b>${multiBadge(MULTI[k.id]||0)}<div>${fmt(k.birth)}${k.mother?' · الأم '+esc(k.mother):''}</div></div><a class="tag" onclick="openAnimal('${k.id}')">${esc(k.num)}</a></div>`).join(''):'<div class="empty">لا يوجد مواليد مرقمة باسمه</div>')+`</div>`;
   }
   // ٢ الأمراض
   const il=[...a.ills].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
@@ -337,7 +359,7 @@ function pageHTML(a){
 
 /* صورة */
 function pickPhoto(){const inp=$('#fileIn');inp.value='';inp.onchange=async()=>{const f=inp.files[0];if(!f)return;
-  try{const src=await resize(f);const a=curA();await idbPut('photos',a.id,src);a.photo=1;save();renderPage()}catch(e){toast('تعذّر قراءة الصورة')}};inp.click()}
+  try{const src=await resize(f);const a=curA();await idbPut('photos',a.id,src);a.photo=1;logE('photo',a,`صورة جديدة لـ ${dn(a)}`);save();renderPage()}catch(e){toast('تعذّر قراءة الصورة')}};inp.click()}
 function resize(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);
   img.onload=()=>{const m=1100,s=Math.min(1,m/Math.max(img.width,img.height));const c=document.createElement('canvas');
     c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.82))};
@@ -345,7 +367,7 @@ function resize(file){return new Promise((res,rej)=>{const img=new Image(),u=URL
 
 /* نقل من صفحة الحيوان */
 function moveSheet(){const a=curA(),p=penOf(a.id);
-  sheet('نقل الرقم '+esc(a.num),`<div class="chips">${D.pens.filter(x=>x.type===a.type).map(x=>`<button class="${p&&p.id===x.id?'on':''}" onclick="place('${a.id}','${x.id}');save();closeSheet();renderPage();toast('نُقل إلى ${esc(x.name).replace(/'/g,'')}')">${esc(x.name)}</button>`).join('')}</div>`)}
+  sheet('نقل '+esc(dn(a)),`<div class="chips">${D.pens.filter(x=>x.type===a.type).map(x=>`<button class="${p&&p.id===x.id?'on':''}" onclick="${p&&p.id===x.id?'closeSheet()':`moveHere('${a.id}','${x.id}')`}">${esc(x.name)}</button>`).join('')}</div>`)}
 
 /* تعديل */
 function editAnimal(){const a=curA();
@@ -359,17 +381,21 @@ function editAnimal(){const a=curA();
    ${a.photo?`<button class="sec2" onclick="delPhoto()">حذف الصورة</button>`:''}
    <button class="sec2 danger" onclick="delAnimal()">حذف السجل نهائياً</button>`)}
 function saveEdit(){const a=curA();const num=normNum($('#f_num').value);if(!num)return $('#f_err').textContent='اكتب الرقم';
-  if(a.status==='a'){const ex=findActive(a.type,num);if(ex&&ex.id!==a.id)return $('#f_err').textContent='الرقم '+num+' مستخدم لحيوان آخر'}
+  const cat=$('#f_cat').value,birth=$('#f_birth').value;
+  if(a.status==='a'){const ex=findActive(a.type,num,spaceOf(a.type,cat));if(ex&&ex.id!==a.id)return $('#f_err').textContent=dn(ex)+' مستخدم لحيوان آخر'}
   const father=normNum($('#f_father').value),mother=normNum($('#f_mother').value);
-  if(father!==a.father){a.father=father;const f=father&&findActive(a.type,father);a.fatherId=f?f.id:''}
-  if(mother!==a.mother){a.mother=mother;const m=mother&&findActive(a.type,mother);a.motherId=m?m.id:''}
+  const before=dn(a),ch=[];
+  if(num!==a.num)ch.push('الرقم '+a.num+' ← '+num);if(cat!==a.cat)ch.push('الفئة '+a.cat+' ← '+cat);
+  if(birth!==a.birth)ch.push('الميلاد '+fmt(birth));if(father!==a.father)ch.push('الأب '+(father||'—'));if(mother!==a.mother)ch.push('الأم '+(mother||'—'));
+  if(father!==a.father){a.father=father;const f=father&&findActive(a.type,father,'m');a.fatherId=f?f.id:''}
+  if(mother!==a.mother){a.mother=mother;const m=mother&&findActive(a.type,mother,'o');a.motherId=m?m.id:''}
   // تحديث رقم المولود في سجل ولادات الأم
   if(num!==a.num){Object.values(D.animals).forEach(x=>x.births.forEach(b=>{if(b.childId===a.id)b.num=num}))}
-  a.num=num;a.cat=$('#f_cat').value;a.birth=$('#f_birth').value;save();closeSheet();renderPage()}
+  a.num=num;a.cat=cat;a.birth=birth;if(ch.length)logE('edit',a,`تعديل ${before}: ${ch.join('، ')}`);save();closeSheet();renderPage()}
 async function delPhoto(){const a=curA();await idbDel('photos',a.id);a.photo=0;save();closeSheet();renderPage()}
 async function delAnimal(){const a=curA();if(!confirm('حذف سجل الرقم '+a.num+' نهائياً مع ولاداته وأمراضه؟'))return;
   removeFromPens(a.id);Object.values(D.animals).forEach(x=>x.births.forEach(b=>{if(b.childId===a.id)b.childId=''}));
-  delete D.animals[a.id];idbDel('photos',a.id).catch(()=>{});save();closeSheet();stack.pop();renderPage()}
+  logE('delete',null,`حذف سجل ${dn(a)} (${a.cat}) نهائياً`,a.type);delete D.animals[a.id];idbDel('photos',a.id).catch(()=>{});save();closeSheet();stack.pop();renderPage()}
 
 /* الولادات */
 function birthForm(a,b){
@@ -384,15 +410,17 @@ function birthForm(a,b){
 }
 function addBirth(){const a=curA();sheet('ولادة جديدة للرقم '+esc(a.num),birthForm(a)+`<button class="pri" onclick="saveBirth()">حفظ الولادة</button><button class="sec2" onclick="saveBirth(true)">حفظ وإضافة توأم</button>`)}
 function makeChild(a,b,num,penId){
-  const f=b.father&&findActive(a.type,b.father);
+  const f=b.father&&findActive(a.type,b.father,'m');
   const ch=createAnimal({type:a.type,num,cat:b.cat,birth:b.date,father:b.father,fatherId:f?f.id:'',mother:a.num,motherId:a.id});
   place(ch.id,penId);b.num=num;b.childId=ch.id;return ch;
 }
-function saveBirth(twin){const a=curA();const num=normNum($('#f_num').value);
-  if(num&&findActive(a.type,num))return $('#f_err').textContent='الرقم '+num+' مستخدم لحيوان آخر';
+function saveBirth(twin){const a=curA();const num=normNum($('#f_num').value);const cat=$('#f_cat').value;
+  if(num){const ex=findActive(a.type,num,spaceOf(a.type,cat));if(ex)return $('#f_err').textContent=dn(ex)+' مستخدم لحيوان آخر'}
   const penId=$('#f_pen').value;if(num&&!penId)return $('#f_err').textContent='اختر الشبك';
-  const b={id:uid(),cat:$('#f_cat').value,date:$('#f_date').value,father:normNum($('#f_father').value),num:'',childId:''};
-  if(num)makeChild(a,b,num,penId);a.births.push(b);save();
+  const b={id:uid(),cat,date:$('#f_date').value,father:normNum($('#f_father').value),num:'',childId:''};
+  if(num)makeChild(a,b,num,penId);a.births.push(b);
+  const n=b.date?a.births.filter(x=>x.date===b.date).length:1;
+  logE('birth',a,`ولادة عند ${dn(a)}: ${cat}${num?' رقم '+num:' بدون رقم'}${n===2?' (توأم)':n>=3?' ('+n+' مواليد)':''}${b.father?' · الأب فحل '+b.father:''} · بتاريخ ${fmt(b.date)}`);save();
   if(twin){const keep=b;sheet('التوأم للرقم '+esc(a.num),birthForm(a,keep)+`<button class="pri" onclick="saveBirth()">حفظ التوأم</button>`);toast('حُفظت الولادة')}
   else{closeSheet();toast(num?'حُفظت ووُضع المولود في الشبك':'حُفظت الولادة')}renderPage()}
 function numberBirth(bid){const a=curA();
@@ -400,12 +428,12 @@ function numberBirth(bid){const a=curA();
    <label>الشبك</label><select id="f_pen">${penOptions(a.type,(penOf(a.id)||{}).id)}</select><div class="err" id="f_err"></div></div>
    <button class="pri" onclick="saveNumber('${bid}')">حفظ</button>`,()=>$('#f_num').focus())}
 function saveNumber(bid){const a=curA(),b=a.births.find(x=>x.id===bid);const num=normNum($('#f_num').value);
-  if(!num)return $('#f_err').textContent='اكتب الرقم';if(findActive(a.type,num))return $('#f_err').textContent='الرقم '+num+' مستخدم لحيوان آخر';
+  if(!num)return $('#f_err').textContent='اكتب الرقم';const ex=findActive(a.type,num,spaceOf(a.type,b.cat));if(ex)return $('#f_err').textContent=dn(ex)+' مستخدم لحيوان آخر';
   const penId=$('#f_pen').value;if(!penId)return $('#f_err').textContent='أضف شبكاً أولاً';
-  makeChild(a,b,num,penId);save();closeSheet();renderPage();toast('وُضع المولود في الشبك')}
+  makeChild(a,b,num,penId);logE('number',a,`ترقيم مولود ${dn(a)} (${b.cat}) برقم ${num}`);save();closeSheet();renderPage();toast('وُضع المولود في الشبك')}
 function delBirth(bid){const a=curA(),b=a.births.find(x=>x.id===bid);
   if(!confirm('حذف هذه الولادة من السجل؟'+(b.childId?'\n(سجل المولود نفسه يبقى)':'')))return;
-  a.births=a.births.filter(x=>x!==b);save();renderPage()}
+  a.births=a.births.filter(x=>x!==b);logE('edit',a,`حذف ولادة (${b.cat} ${fmt(b.date)}) من سجل ${dn(a)}`);save();renderPage()}
 
 /* الأمراض */
 function addIll(){sheet('تسجيل مرض',`<div class="f"><label>المرض / العارض</label><input id="f_name">
@@ -413,8 +441,9 @@ function addIll(){sheet('تسجيل مرض',`<div class="f"><label>المرض / 
   <label>العلاج / ملاحظات</label><textarea id="f_note" rows="3"></textarea><div class="err" id="f_err"></div></div>
   <button class="pri" onclick="saveIll()">حفظ</button>`,()=>$('#f_name').focus())}
 function saveIll(){const name=$('#f_name').value.trim();if(!name)return $('#f_err').textContent='اكتب اسم المرض';
-  curA().ills.push({id:uid(),name,date:$('#f_date').value,note:$('#f_note').value.trim()});save();closeSheet();renderPage()}
-function delIll(id){if(!confirm('حذف هذا السجل؟'))return;const a=curA();a.ills=a.ills.filter(x=>x.id!==id);save();renderPage()}
+  const a=curA(),note=$('#f_note').value.trim();a.ills.push({id:uid(),name,date:$('#f_date').value,note});
+  logE('ill',a,`مرض ${dn(a)}: ${name}${note?' — '+note:''}`);save();closeSheet();renderPage()}
+function delIll(id){if(!confirm('حذف هذا السجل؟'))return;const a=curA(),il=a.ills.find(x=>x.id===id);a.ills=a.ills.filter(x=>x.id!==id);if(il)logE('edit',a,`حذف مرض «${il.name}» من سجل ${dn(a)}`);save();renderPage()}
 
 /* الخروج */
 function exitSheet(r){const a=curA();
@@ -422,18 +451,42 @@ function exitSheet(r){const a=curA();
    <label>${r==='sold'?'السعر / المشتري / ملاحظات':'ملاحظات'}</label><textarea id="f_note" rows="3"></textarea></div>
    <div class="muted" style="font-size:14px;margin-top:10px">سيخرج الرقم ${esc(a.num)} من الشبك ويصبح متاحاً لحيوان آخر.</div>
    <button class="pri" onclick="saveExit('${r}')">تأكيد ${REASONS[r]}</button>`)}
-function saveExit(r){const a=curA();a.status=r;a.end={date:$('#f_date').value,note:$('#f_note').value.trim()};removeFromPens(a.id);save();closeSheet();renderPage();toast('أصبح الرقم '+a.num+' حراً')}
-function restoreAnimal(){const a=curA();if(findActive(a.type,a.num))return toast('الرقم '+a.num+' مستخدم الآن لحيوان آخر — عدّل رقمه أولاً');
+function saveExit(r){const a=curA();a.status=r;a.end={date:$('#f_date').value,note:$('#f_note').value.trim()};removeFromPens(a.id);
+  logE(r,a,`${REASONS[r]}: ${dn(a)} (${a.cat})${a.end.note?' — '+a.end.note:''} · بتاريخ ${fmt(a.end.date)}`);save();closeSheet();renderPage();toast('أصبح الرقم '+a.num+' حراً')}
+function restoreAnimal(){const a=curA();if(findActive(a.type,a.num,spaceOf(a.type,a.cat)))return toast(dn(a)+' مستخدم الآن لحيوان آخر — عدّل رقمه أولاً');
   sheet('إرجاع الرقم '+esc(a.num),`<div class="f"><label>الشبك</label><select id="f_pen">${penOptions(a.type)}</select></div><button class="pri" onclick="doRestore()">إرجاع</button>`)}
-function doRestore(){const a=curA(),pid=$('#f_pen').value;if(!pid)return toast('أضف شبكاً أولاً');a.status='a';a.end=null;place(a.id,pid);save();closeSheet();renderPage()}
+function doRestore(){const a=curA(),pid=$('#f_pen').value;if(!pid)return toast('أضف شبكاً أولاً');a.status='a';a.end=null;place(a.id,pid);logE('restore',a,`إرجاع ${dn(a)} للحلال`);save();closeSheet();renderPage()}
 
 /* بحث وأرشيف */
 function openSearch(){sheet('بحث عن رقم',`<div class="f"><input id="f_q" inputmode="numeric" placeholder="اكتب الرقم" oninput="doSearch()"></div><div id="sr" style="margin-top:8px"></div>`,()=>$('#f_q').focus())}
 function doSearch(){const q=normNum($('#f_q').value);if(!q){$('#sr').innerHTML='';return}
   const r=Object.values(D.animals).filter(a=>a.num.includes(q)).sort((a,b)=>(a.status==='a'?0:1)-(b.status==='a'?0:1)||a.num.length-b.num.length).slice(0,40);
-  $('#sr').innerHTML=r.length?r.map(a=>{const p=penOf(a.id);return `<div class="item" onclick="openAnimal('${a.id}')"><div class="t"><b>${esc(a.num)} · ${esc(a.cat)}</b><div>${typeName(a.type)} · ${a.status==='a'?(p?esc(p.name):'بدون شبك'):REASONS[a.status]+' '+fmt(a.end&&a.end.date)}</div></div><span class="tag">فتح</span></div>`}).join(''):'<div class="empty">لا نتائج</div>'}
+  $('#sr').innerHTML=r.length?r.map(a=>{const p=penOf(a.id);return `<div class="item" onclick="openAnimal('${a.id}')"><div class="t"><b>${esc(dn(a))} · ${esc(a.cat)}</b><div>${typeName(a.type)} · ${a.status==='a'?(p?esc(p.name):'بدون شبك'):REASONS[a.status]+' '+fmt(a.end&&a.end.date)}</div></div><span class="tag">فتح</span></div>`}).join(''):'<div class="empty">لا نتائج</div>'}
 function openArchive(){const r=Object.values(D.animals).filter(a=>a.type===cur&&a.status!=='a').sort((a,b)=>((b.end&&b.end.date)||'').localeCompare((a.end&&a.end.date)||''));
-  sheet('أرشيف '+typeName(cur),r.length?r.map(a=>`<div class="item" onclick="openAnimal('${a.id}')"><div class="t"><b>${esc(a.num)} · ${esc(a.cat)}</b><div>${REASONS[a.status]} · ${fmt(a.end&&a.end.date)}${a.end&&a.end.note?' · '+esc(a.end.note):''}</div></div><span class="tag">فتح</span></div>`).join(''):'<div class="empty">لا يوجد شيء في الأرشيف</div>')}
+  sheet('أرشيف '+typeName(cur),r.length?r.map(a=>`<div class="item" onclick="openAnimal('${a.id}')"><div class="t"><b>${esc(dn(a))} · ${esc(a.cat)}</b><div>${REASONS[a.status]} · ${fmt(a.end&&a.end.date)}${a.end&&a.end.note?' · '+esc(a.end.note):''}</div></div><span class="tag">فتح</span></div>`).join(''):'<div class="empty">لا يوجد شيء في الأرشيف</div>')}
+
+/* صفحة التغييرات */
+const LOGK={add:['➕','إضافة'],birth:['🍼','ولادة'],number:['🔢','ترقيم'],ill:['🩺','مرض'],dead:['✖️','موت'],sold:['💰','بيع'],slaughter:['🔪','ذبح'],
+  move:['⇄','نقل'],edit:['✏️','تعديل'],restore:['↩️','إرجاع'],delete:['🗑️','حذف'],pen:['🧱','شبوك'],photo:['📷','صورة']};
+let logDays=7,logType='all',logKind='all';
+function openLog(){logType=cur;renderLog()}
+function renderLog(){
+  const from=logDays?Date.now()-logDays*864e5:0;
+  const base=(D.log||[]).filter(e=>e.t>=from&&(logType==='all'||e.type===logType));
+  const list=base.filter(e=>logKind==='all'||e.k===logKind).slice().reverse();
+  const cnt=k=>base.filter(e=>e.k===k).length;
+  const chip=(v,cv,fn,label)=>`<button class="${v===cv?'on':''}" onclick="${fn}">${label}</button>`;
+  let h=`<div class="chips">${[[7,'آخر ٧ أيام'],[30,'٣٠ يوم'],[0,'الكل']].map(([d,l])=>chip(d,logDays,`logDays=${d};renderLog()`,l)).join('')}</div>
+   <div class="chips" style="margin-top:8px">${chip('all',logType,"logType='all';renderLog()",'كل الأقسام')}${TYPES.map(t=>chip(t.k,logType,`logType='${t.k}';renderLog()`,t.n)).join('')}</div>
+   <div class="chips" style="margin-top:8px">${chip('all',logKind,"logKind='all';renderLog()",'الكل '+base.length)}${['birth','dead','sold','slaughter','ill','add'].map(k=>chip(k,logKind,`logKind='${k}';renderLog()`,LOGK[k][0]+' '+LOGK[k][1]+' '+cnt(k))).join('')}</div>`;
+  let day='';
+  h+=list.length?list.map(e=>{const d=new Date(e.t);const dk=d.toDateString();let s='';
+    if(dk!==day){day=dk;s=`<div class="dayh">${d.toLocaleDateString('ar-SA-u-ca-gregory-nu-latn',{weekday:'long'})} ${fmt(new Date(e.t-d.getTimezoneOffset()*6e4).toISOString().slice(0,10))}</div>`}
+    const ok=e.id&&D.animals[e.id];
+    return s+`<div class="item" ${ok?`onclick="openAnimal('${e.id}')"`:''}><span class="lg-ico">${(LOGK[e.k]||['•'])[0]}</span><div class="t" style="font-size:15px">${esc(e.x)}${logType==='all'?`<div>${typeName(e.type)}</div>`:''}</div><span class="lg-time">${d.toLocaleTimeString('ar-SA-u-nu-latn',{hour:'numeric',minute:'2-digit'})}</span></div>`}).join('')
+   :'<div class="empty" style="margin-top:14px">لا توجد تغييرات في هذه الفترة</div>';
+  sheet('📋 التغييرات',h);
+}
 
 /* نسخ احتياطي */
 function openBackup(){const all=actives();
@@ -450,7 +503,7 @@ async function exportData(){try{
 $('#impIn').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const j=JSON.parse(await f.text());if(j.app!=='halali'||!j.D)throw 0;
     if(!confirm('سيتم استبدال كل البيانات الحالية بالنسخة المختارة. متابعة؟'))return;
-    D=j.D;await idbClear('photos');for(const k in (j.photos||{}))await idbPut('photos',k,j.photos[k]);
+    D=j.D;D.log=D.log||[];await idbClear('photos');for(const k in (j.photos||{}))await idbPut('photos',k,j.photos[k]);
     save();stack=[];closeSheet();renderPage();toast('تم الاسترجاع')}catch(err){toast('الملف غير صالح')}});
 
 /* الورقة السفلية */
@@ -467,6 +520,7 @@ function closeSheet(){const el=$('#sheet');el.classList.remove('on');el.innerHTM
         {id:uid(),type:t.k,name:'شبك الأمهات',cells:Array(10).fill(null)},
         {id:uid(),type:t.k,name:'شبك الصغار',cells:Array(10).fill(null)})});save()}
   }catch(e){toast('تعذّر فتح قاعدة البيانات')}
+  D.log=D.log||[];
   try{cur=localStorage.getItem('cur')||'harri'}catch(e){}
   if(!TYPES.some(t=>t.k===cur))cur='harri';
   render();
