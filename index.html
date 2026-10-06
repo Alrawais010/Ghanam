@@ -27,6 +27,8 @@ button{font:inherit;cursor:pointer}
 #side .sp{flex:1}
 #side button.tool{font-size:20px;padding:8px 2px;opacity:.85}
 #side button.tool span{font-size:12px;font-weight:600}
+#side .ver{margin-top:4px;text-align:center;font-size:11px;background:rgba(255,255,255,.12);border-radius:12px;padding:6px 2px;line-height:1.3}
+#side .ver b{display:block;font-size:20px;color:#ffd21f}
 #main{flex:1;min-width:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(env(safe-area-inset-top) + 10px) 12px calc(env(safe-area-inset-bottom) + 40px)}
 .mh{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .mh h1{margin:0;font-size:28px;flex:1}
@@ -45,7 +47,7 @@ button{font:inherit;cursor:pointer}
 .cell small{font-size:9px;opacity:.85;white-space:nowrap;max-width:100%;overflow:hidden}
 .cell.n{background:#1f4fa8;color:#ffd21f;border:0}
 .cell.fahl{background:#fff;color:#000;border:1.5px solid #bdb5a3}
-.cell.fahl b{font-size:15px}
+.cell.fahl small{font-size:11px;font-weight:700;opacity:1;margin-bottom:1px}
 .cell.tw{background:#0f5132;color:#ffd21f;border:0}
 .cell.tr{background:#b5121b;color:#8ecbff;border:0}
 .lg-n{background:#1f4fa8}.lg-fahl{background:#fff;border:1px solid #bdb5a3}.lg-tw{background:#0f5132}.lg-tr{background:#b5121b}
@@ -123,6 +125,7 @@ a.lk{color:var(--acc);text-decoration:underline;font-weight:800}
 <input type="file" id="impIn" accept=".json,application/json" hidden>
 
 <script>
+const APP_VER='4';
 const TYPES=[{k:'harri',n:'حري',e:'🐑'},{k:'naimi',n:'نعيمي',e:'🐏'},{k:'maaz',n:'معزا',e:'🐐'}];
 // [الاسم, الجنس m/f, المرحلة: 2 كبير، 1 صغير، 0 رضيع]
 const CATS={
@@ -208,7 +211,8 @@ function renderSide(){
    <button class="tool" onclick="openLog()">📋<span>التغييرات</span></button>
    <button class="tool" onclick="openSearch()">🔍<span>بحث</span></button>
    <button class="tool" onclick="openArchive()">🗂️<span>الأرشيف</span></button>
-   <button class="tool" onclick="openBackup()">💾<span>نسخة</span></button>`;
+   <button class="tool" onclick="openBackup()">💾<span>نسخ احتياطي</span></button>
+   <div class="ver">الإصدار<b>${APP_VER}</b></div>`;
 }
 function setType(k){cur=k;sel=null;try{localStorage.setItem('cur',k)}catch(e){}render();$('#main').scrollTop=0}
 function render(){
@@ -233,7 +237,7 @@ function penHTML(p){
   const cells=p.cells.map((id,i)=>{const a=id&&D.animals[id];
     const s=sel&&sel.p===p.id&&sel.i===i?' sel':'';
     if(!a)return `<div class="cell${moveMode&&sel?' drop':''}" data-p="${p.id}" data-i="${i}"></div>`;
-    if(isFahl(a))return `<div class="cell fahl${s}" data-p="${p.id}" data-i="${i}"><b>فحل ${esc(a.num)}</b></div>`;
+    if(isFahl(a))return `<div class="cell fahl${s}" data-p="${p.id}" data-i="${i}"><small>فحل</small><b>${esc(a.num)}</b></div>`;
     return `<div class="cell ${cellCls(a)}${s}" data-p="${p.id}" data-i="${i}"><b>${esc(a.num)}</b><small>${esc(a.cat)}</small></div>`}).join('');
   return `<section class="pen"><div class="ph"><b onclick="penMenu('${p.id}')">${esc(p.name)}</b><span class="cnt">${n}</span><button class="mini" onclick="penMenu('${p.id}')">⋯</button></div>
     <div class="grid">${cells}</div><button class="addrow" onclick="addRow('${p.id}')">+ صف</button></section>`;
