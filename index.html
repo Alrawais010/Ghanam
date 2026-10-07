@@ -54,6 +54,10 @@ button{font:inherit;cursor:pointer}
 .badge{display:inline-block;font-size:12px;font-weight:800;border-radius:8px;padding:2px 7px;margin-inline-start:6px}
 .badge.tw{background:#0f5132;color:#ffd21f}.badge.tr{background:#b5121b;color:#8ecbff}
 .dayh{font-size:14px;font-weight:800;color:var(--acc);margin:16px 0 2px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.bgrp{border:1px solid var(--line);border-radius:14px;padding:4px 12px;margin-top:10px;background:var(--bg)}
+.bgrp .item{border-top:1px solid var(--line)}
+.bgh{display:flex;align-items:center;gap:6px;padding:8px 0}
+.bgh>div{flex:1;min-width:0}.bgh b{font-size:17px}
 .lg-ico{font-size:20px;width:28px;text-align:center;flex:none}
 .lg-time{font-size:12px;color:var(--mut);flex:none}
 .cell.sel{outline:3px solid var(--acc);transform:scale(.9)}
@@ -125,7 +129,7 @@ a.lk{color:var(--acc);text-decoration:underline;font-weight:800}
 <input type="file" id="impIn" accept=".json,application/json" hidden>
 
 <script>
-const APP_VER='7';
+const APP_VER='8';
 const TYPES=[{k:'harri',n:'حري',e:'🐑'},{k:'naimi',n:'نعيمي',e:'🐏'},{k:'maaz',n:'معزا',e:'🐐'}];
 // [الاسم, الجنس m/f, المرحلة: 2 كبير، 1 صغير، 0 رضيع]
 const CATS={
@@ -338,12 +342,15 @@ function pageHTML(a){
   </div>`;
   // ١ الولادات
   if(c[1]==='f'){
-    const bs=[...a.births].sort((x,y)=>(y.date||'').localeCompare(x.date||''));
-    h+=`<div class="sec"><h3>١ · الولادات <span class="muted" style="font-size:14px;flex:1;margin-right:8px">${bs.length?'('+bs.length+')':''}</span><button class="mini" onclick="addBirth()">+ ولادة</button></h3>`+
-    (bs.length?bs.map(b=>{const ch=b.childId&&D.animals[b.childId];const n=b.date?a.births.filter(x=>x.date===b.date).length:1;
-      return `<div class="item"><div class="t"><b>${esc(b.cat)}</b>${multiBadge(n)}<div>${fmt(b.date)}${b.father?' · الأب فحل '+esc(b.father):''}</div></div>
+    const gs=birthGroups(a);
+    h+=`<div class="sec"><h3>١ · الولادات <span class="muted" style="font-size:14px;flex:1;margin-right:8px">${gs.length?'('+gs.length+' ولادة · '+a.births.length+' مولود)':''}</span><button class="mini" onclick="addBirth()">+ ولادة</button></h3>`+
+    (gs.length?gs.map((g,i)=>({g,i})).reverse().map(({g,i})=>{const prev=gs[i-1];const gap=prev&&prev.date&&g.date?monthsBetween(prev.date,g.date):'';
+      return `<div class="bgrp"><div class="bgh"><div><b>الولادة ${ordinal(i+1)}</b>${multiBadge(g.items.length)}<div class="muted" style="font-size:13px">${g.date?fmt(g.date):'بدون تاريخ'}${gap?' · بعد '+gap+' من السابقة':''}${g.items[0].father?' · الأب فحل '+esc(g.items[0].father):''}</div></div>
+        <button class="mini" onclick="editGroup('${g.key}')">تعديل</button><button class="mini" onclick="addBirth('${g.date}')">+ مولود</button></div>`+
+      g.items.map(b=>{const ch=b.childId&&D.animals[b.childId];
+      return `<div class="item"><div class="t" onclick="editBirth('${b.id}')"><b>${esc(b.cat)}</b></div>
       ${ch?`<a class="tag" onclick="openAnimal('${ch.id}')">${esc(ch.num)}</a>${ch.status!=='a'?'<span class="muted" style="font-size:13px">'+REASONS[ch.status]+'</span>':''}`:`<button class="mini" onclick="numberBirth('${b.id}')">ترقيم</button>`}
-      <button class="del" onclick="delBirth('${b.id}')">✕</button></div>`}).join(''):'<div class="empty">لا توجد ولادات مسجلة</div>')+`</div>`;
+      <button class="del" onclick="delBirth('${b.id}')">✕</button></div>`}).join('')+`</div>`}).join(''):'<div class="empty">لا توجد ولادات مسجلة</div>')+`</div>`;
   }else{
     const kids=Object.values(D.animals).filter(x=>x.type===a.type&&x.id!==a.id&&(x.fatherId===a.id||(!x.fatherId&&x.father&&x.father===a.num)));
     h+=`<div class="sec"><h3>١ · مواليده ${kids.length?'('+kids.length+')':''}</h3>`+(kids.length?kids.sort((x,y)=>(y.birth||'').localeCompare(x.birth||'')).map(k=>
@@ -395,6 +402,13 @@ function saveEdit(){const a=curA();const num=normNum($('#f_num').value);if(!num)
   if(mother!==a.mother){a.mother=mother;const m=mother&&findActive(a.type,mother,'o');a.motherId=m?m.id:''}
   // تحديث رقم المولود في سجل ولادات الأم
   if(num!==a.num){Object.values(D.animals).forEach(x=>x.births.forEach(b=>{if(b.childId===a.id)b.num=num}))}
+  // تحديث سجل الولادة عند الأم (التاريخ والنوع)
+  const mo=motherOf(a),rec=mo&&mo.births.find(b=>b.childId===a.id);
+  if(rec&&(rec.date!==birth||rec.cat!==cat)){
+    const old=rec.date,sibs=old&&birth!==old?mo.births.filter(b=>b!==rec&&b.date===old):[];
+    if(sibs.length&&confirm(`هذا المولود ضمن ${birthOrder(mo,old)} للأم ${dn(mo)} مع ${sibs.length} ${sibs.length>1?'آخرين':'آخر'}.\nهل تريد تغيير تاريخ الولادة لهم كلهم إلى ${fmt(birth)}؟`))
+      sibs.forEach(b=>{b.date=birth;pushToChild(mo,b)});
+    rec.date=birth;rec.cat=cat}
   a.num=num;a.cat=cat;a.birth=birth;if(ch.length)logE('edit',a,`تعديل ${before}: ${ch.join('، ')}`);save();closeSheet();renderPage()}
 async function delPhoto(){const a=curA();await idbDel('photos',a.id);a.photo=0;save();closeSheet();renderPage()}
 async function delAnimal(){const a=curA();if(!confirm('حذف سجل الرقم '+a.num+' نهائياً مع ولاداته وأمراضه؟'))return;
@@ -402,17 +416,48 @@ async function delAnimal(){const a=curA();if(!confirm('حذف سجل الرقم 
   logE('delete',null,`حذف سجل ${dn(a)} (${a.cat}) نهائياً`,a.type);delete D.animals[a.id];idbDel('photos',a.id).catch(()=>{});save();closeSheet();stack.pop();renderPage()}
 
 /* الولادات */
+const ORD=['الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة','الثامنة','التاسعة','العاشرة','الحادية عشرة','الثانية عشرة'];
+const ordinal=n=>ORD[n-1]||('رقم '+n);
+// كل المواليد في نفس التاريخ = ولادة واحدة، مرتبة من الأقدم
+function birthGroups(a){const m={};a.births.forEach(b=>{const k=b.date||('nd:'+b.id);(m[k]=m[k]||{key:k,date:b.date||'',items:[]}).items.push(b)});
+  return Object.values(m).sort((x,y)=>(x.date||'9999').localeCompare(y.date||'9999'))}
+function monthsBetween(d1,d2){const days=Math.round((new Date(d2)-new Date(d1))/864e5);if(days<1)return '';
+  if(days<45)return days+' يوم';const m=Math.round(days/30.44);return m<24?m+' شهر':(Math.floor(m/12)+' سنة'+(m%12?' و'+(m%12)+' شهر':''))}
+function birthOrder(a,date){const gs=birthGroups(a);const i=gs.findIndex(g=>g.date===date);return i<0?'':'الولادة '+ordinal(i+1)}
+// تحديث المولود عند تعديل سجل الولادة
+function pushToChild(a,b){const ch=b.childId&&D.animals[b.childId];if(!ch)return;ch.birth=b.date;ch.cat=b.cat;
+  if(ch.father!==b.father){ch.father=b.father;const f=b.father&&findActive(a.type,b.father,'m');ch.fatherId=f?f.id:''}}
+function motherOf(child){return Object.values(D.animals).find(x=>x.births.some(b=>b.childId===child.id))}
+function groupByKey(a,key){return birthGroups(a).find(g=>g.key===key)}
+function editGroup(key){const a=curA(),g=groupByKey(a,key);const i=birthGroups(a).indexOf(g);
+  sheet('تعديل الولادة '+ordinal(i+1),`<div class="f"><label>تاريخ الولادة (يتغير لكل المواليد فيها)</label><input id="g_date" type="date" value="${esc(g.date)}">
+   <label>رقم الأب (فحل)</label><input id="g_father" list="dlm" inputmode="numeric" value="${esc(g.items[0].father||'')}">${malesList(a.type)}<div class="err" id="f_err"></div></div>
+   <button class="pri" onclick="saveGroup('${key}')">حفظ</button>`)}
+function saveGroup(key){const a=curA(),g=groupByKey(a,key);const date=$('#g_date').value,father=normNum($('#g_father').value);
+  if(!date)return $('#f_err').textContent='اختر التاريخ';
+  g.items.forEach(b=>{b.date=date;b.father=father;pushToChild(a,b)});
+  logE('edit',a,`تعديل ولادة ${dn(a)}: التاريخ ${fmt(date)}${father?' · الأب فحل '+father:''}`);save();closeSheet();renderPage();toast('عُدّلت الولادة')}
+function editBirth(bid){const a=curA(),b=a.births.find(x=>x.id===bid);
+  sheet('تعديل المولود',`<div class="f"><label>نوع المولود</label><select id="f_cat">${catOptions(a.type,b.cat)}</select>
+   <label>تاريخ الولادة</label><input id="f_date" type="date" value="${esc(b.date)}">
+   <label>رقم الأب (اختياري)</label><input id="f_father" list="dlm" inputmode="numeric" value="${esc(b.father||'')}">${malesList(a.type)}<div class="err" id="f_err"></div></div>
+   <button class="pri" onclick="saveBirthEdit('${bid}')">حفظ</button>`)}
+function saveBirthEdit(bid){const a=curA(),b=a.births.find(x=>x.id===bid);const cat=$('#f_cat').value;
+  const ch=b.childId&&D.animals[b.childId];
+  if(ch&&ch.status==='a'&&spaceOf(a.type,cat)!==spaceOf(a.type,ch.cat)){const ex=findActive(a.type,ch.num,spaceOf(a.type,cat));if(ex&&ex.id!==ch.id)return $('#f_err').textContent=dn(ex)+' مستخدم لحيوان آخر'}
+  b.cat=cat;b.date=$('#f_date').value;b.father=normNum($('#f_father').value);pushToChild(a,b);
+  logE('edit',a,`تعديل مولود ${dn(a)}: ${cat} · ${fmt(b.date)}`);save();closeSheet();renderPage()}
 function birthForm(a,b){
   const youngDefault=CATS[a.type].find(c=>c[2]===0)[0];
   return `<div class="f">
    <label>نوع المولود</label><select id="f_cat">${catOptions(a.type,b?b.cat:youngDefault)}</select>
-   <label>تاريخ الولادة</label><input id="f_date" type="date" value="${b?esc(b.date):today()}">
+   <label>تاريخ الولادة</label><input id="f_date" type="date" value="${b&&b.date?esc(b.date):today()}">
    <label>رقم المولود (إذا تم ترقيمه)</label><input id="f_num" inputmode="numeric" autocomplete="off">
    <label>رقم الأب (اختياري)</label><input id="f_father" list="dlm" inputmode="numeric" value="${b?esc(b.father):''}">
    <label>الشبك الذي يوضع فيه المولود</label><select id="f_pen">${penOptions(a.type,(penOf(a.id)||{}).id)}</select>
    ${malesList(a.type)}<div class="err" id="f_err"></div></div>`;
 }
-function addBirth(){const a=curA();sheet('ولادة جديدة للرقم '+esc(a.num),birthForm(a)+`<button class="pri" onclick="saveBirth()">حفظ الولادة</button><button class="sec2" onclick="saveBirth(true)">حفظ وإضافة توأم</button>`)}
+function addBirth(date){const a=curA();sheet((date?'مولود إضافي في '+birthOrder(a,date):'ولادة جديدة')+' للرقم '+esc(a.num),birthForm(a,date?{date,cat:CATS[a.type].find(c=>c[2]===0)[0],father:(a.births.find(x=>x.date===date)||{}).father||''}:null)+`<button class="pri" onclick="saveBirth()">حفظ الولادة</button><button class="sec2" onclick="saveBirth(true)">حفظ وإضافة توأم</button>`)}
 function makeChild(a,b,num,penId){
   const f=b.father&&findActive(a.type,b.father,'m');
   const ch=createAnimal({type:a.type,num,cat:b.cat,birth:b.date,father:b.father,fatherId:f?f.id:'',mother:a.num,motherId:a.id});
@@ -424,7 +469,7 @@ function saveBirth(twin){const a=curA();const num=normNum($('#f_num').value);con
   const b={id:uid(),cat,date:$('#f_date').value,father:normNum($('#f_father').value),num:'',childId:''};
   if(num)makeChild(a,b,num,penId);a.births.push(b);
   const n=b.date?a.births.filter(x=>x.date===b.date).length:1;
-  logE('birth',a,`ولادة عند ${dn(a)}: ${cat}${num?' رقم '+num:' بدون رقم'}${n===2?' (توأم)':n>=3?' ('+n+' مواليد)':''}${b.father?' · الأب فحل '+b.father:''} · بتاريخ ${fmt(b.date)}`);save();
+  logE('birth',a,`${birthOrder(a,b.date)||'ولادة'} عند ${dn(a)}: ${cat}${num?' رقم '+num:' بدون رقم'}${n===2?' (توأم)':n>=3?' ('+n+' مواليد)':''}${b.father?' · الأب فحل '+b.father:''} · بتاريخ ${fmt(b.date)}`);save();
   if(twin){const keep=b;sheet('التوأم للرقم '+esc(a.num),birthForm(a,keep)+`<button class="pri" onclick="saveBirth()">حفظ التوأم</button>`);toast('حُفظت الولادة')}
   else{closeSheet();toast(num?'حُفظت ووُضع المولود في الشبك':'حُفظت الولادة')}renderPage()}
 function numberBirth(bid){const a=curA();
@@ -525,6 +570,9 @@ function closeSheet(){const el=$('#sheet');el.classList.remove('on');el.innerHTM
         {id:uid(),type:t.k,name:'شبك الصغار',cells:Array(10).fill(null)})});save()}
   }catch(e){toast('تعذّر فتح قاعدة البيانات')}
   D.log=D.log||[];
+  // إصلاح السجلات القديمة: تاريخ الولادة عند الأم يتبع تاريخ ميلاد المولود
+  let fixed=0;Object.values(D.animals).forEach(mo=>mo.births.forEach(b=>{const c=b.childId&&D.animals[b.childId];
+    if(c&&c.birth&&c.birth!==b.date){b.date=c.birth;fixed++}if(c&&c.cat&&c.cat!==b.cat){b.cat=c.cat;fixed++}}));if(fixed)save();
   try{cur=localStorage.getItem('cur')||'harri'}catch(e){}
   if(!TYPES.some(t=>t.k===cur))cur='harri';
   render();
