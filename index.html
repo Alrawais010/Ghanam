@@ -129,7 +129,7 @@ a.lk{color:var(--acc);text-decoration:underline;font-weight:800}
 <input type="file" id="impIn" accept=".json,application/json" hidden>
 
 <script>
-const APP_VER='8';
+const APP_VER='9';
 const TYPES=[{k:'harri',n:'حري',e:'🐑'},{k:'naimi',n:'نعيمي',e:'🐏'},{k:'maaz',n:'معزا',e:'🐐'}];
 // [الاسم, الجنس m/f, المرحلة: 2 كبير، 1 صغير، 0 رضيع]
 const CATS={
@@ -174,16 +174,21 @@ function save(){idbPut('kv','db',D).catch(()=>toast('تعذّر الحفظ!'))}
 /* ---------- أدوات ---------- */
 const catInfo=a=>(CATS[a.type].find(c=>c[0]===a.cat))||[a.cat,'f',2];
 // الفحول لها أرقام مستقلة (m) عن بقية الحلال (o) داخل كل قسم
-const spaceOf=(type,cat)=>{const c=CATS[type].find(x=>x[0]===cat)||[cat,'f',2];return c[1]==='m'&&c[2]===2?'m':'o'};
-const isFahl=a=>spaceOf(a.type,a.cat)==='m';
-const dn=a=>a?(isFahl(a)?'فحل '+a.num:a.num):'';
+// كل فئة لها أرقامها المستقلة من ١ (فحل، شاة، طلي، رخل، رضيع، رضيعة…) داخل كل قسم
+const spaceOf=(type,cat)=>cat;
+const catRow=(type,cat)=>CATS[type].find(x=>x[0]===cat)||[cat,'f',2];
+const isFahlCat=(type,cat)=>{const c=catRow(type,cat);return c[1]==='m'&&c[2]===2};
+const isMomCat=(type,cat)=>{const c=catRow(type,cat);return c[1]==='f'&&c[2]===2};
+const isFahl=a=>isFahlCat(a.type,a.cat);
+const dn=a=>a?(isFahl(a)?'فحل '+a.num:a.cat+' '+a.num):'';
 let MULTI={};
 function calcMulti(){MULTI={};Object.values(D.animals).forEach(mo=>{const g={};mo.births.forEach(b=>{if(b.date)(g[b.date]=g[b.date]||[]).push(b)});
   Object.values(g).forEach(arr=>{if(arr.length>1)arr.forEach(b=>{if(b.childId)MULTI[b.childId]=arr.length})})})}
 function cellCls(a){if(isFahl(a))return 'fahl';const n=MULTI[a.id]||0;return n>=3?'tr':n===2?'tw':'n'}
 const multiBadge=n=>n>=3?'<span class="badge tr">ثلاثة</span>':n===2?'<span class="badge tw">توأم</span>':'';
 const actives=type=>Object.values(D.animals).filter(a=>a.status==='a'&&(!type||a.type===type));
-const findActive=(type,num,sp)=>actives(type).find(a=>a.num===num&&(!sp||spaceOf(a.type,a.cat)===sp));
+// sp: 'm' = الفحول، 'o' = الأمهات، أو اسم الفئة
+const findActive=(type,num,sp)=>actives(type).find(a=>a.num===num&&(!sp||(sp==='m'?isFahlCat(a.type,a.cat):sp==='o'?isMomCat(a.type,a.cat):a.cat===sp)));
 function logE(k,a,x,type){D.log=D.log||[];D.log.push({t:Date.now(),k,type:a?a.type:(type||cur),id:a?a.id:'',x});if(D.log.length>6000)D.log.splice(0,D.log.length-6000)}
 function penOf(id){return D.pens.find(p=>p.cells.includes(id))}
 function removeFromPens(id){D.pens.forEach(p=>{const i=p.cells.indexOf(id);if(i>-1)p.cells[i]=null})}

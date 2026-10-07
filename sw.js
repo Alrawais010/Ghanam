@@ -1,4 +1,4 @@
-const P='halali-',C=P+'v8';
+const P='halali-',C=P+'v9';
 const F=['./','./index.html','./manifest.json'];
 const fresh=u=>new Request(u,{cache:'reload'});
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F.map(fresh)).then(()=>c.add(fresh('./icon.png')).catch(()=>{}))));self.skipWaiting()});
